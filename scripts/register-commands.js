@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { ChannelType, REST, Routes, SlashCommandBuilder } from 'discord.js';
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
@@ -41,6 +41,17 @@ const commands = [
   new SlashCommandBuilder()
     .setName('users')
     .setDescription('Lists users currently on the un-gibberize list.')
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('servicechannel')
+    .setDescription('Sets the channel Giberrator uses for service messages.')
+    .addChannelOption((option) =>
+      option
+        .setName('channel')
+        .setDescription('The service text channel.')
+        .addChannelTypes(ChannelType.GuildText)
+        .setRequired(true),
+    )
     .toJSON(),
 ];
 

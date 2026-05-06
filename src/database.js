@@ -22,6 +22,15 @@ db.run(`
   );
 `);
 
+db.run(`
+  CREATE TABLE IF NOT EXISTS guild_settings (
+    guild_id TEXT PRIMARY KEY,
+    service_channel_id TEXT,
+    service_channel_set_by TEXT,
+    service_channel_set_at TEXT
+  );
+`);
+
 persist();
 
 function persist() {
@@ -86,4 +95,43 @@ export function listTrackedUsers({ guildId }) {
   }
 
   return result[0].values.map(([userId]) => userId);
+}
+
+export function setServiceChannel({ guildId, channelId, setBy }) {
+  db.run(
+    `
+      INSERT INTO guild_settings (
+        guild_id,
+        service_channel_id,
+        service_channel_set_by,
+        service_channel_set_at
+      )
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(guild_id) DO UPDATE SET
+        service_channel_id = excluded.service_channel_id,
+        service_channel_set_by = excluded.service_channel_set_by,
+        service_channel_set_at = excluded.service_channel_set_at;
+    `,
+    [guildId, channelId, setBy],
+  );
+
+  persist();
+}
+
+export function getServiceChannel({ guildId }) {
+  const result = db.exec(
+    `
+      SELECT service_channel_id
+      FROM guild_settings
+      WHERE guild_id = ?
+      LIMIT 1;
+    `,
+    [guildId],
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return null;
+  }
+
+  return result[0].values[0][0];
 }

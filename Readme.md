@@ -38,9 +38,12 @@ It also includes two server management commands for choosing whose messages shou
 /adduser user:@someone
 /removeuser user:@someone
 /users
+/servicechannel channel:#channel
 ```
 
 Tracked users are stored in a local SQLite database, and `/users` lists the users currently tracked for the server.
+
+`/servicechannel` stores a server service channel and sends a test message there. If the bot cannot send the test message, it will try to DM the user who ran the command with the permission issue.
 
 When a tracked user sends a new server message, Giberrator queues it for translation, sends it to the configured local Ollama server, then replies with either the best readable translation or up to three likely translations.
 

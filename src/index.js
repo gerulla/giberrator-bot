@@ -1,10 +1,11 @@
 import 'dotenv/config';
-import { Client, Events, GatewayIntentBits } from 'discord.js';
+import { ChannelType, Client, Events, GatewayIntentBits } from 'discord.js';
 import {
   addTrackedUser,
   isTrackedUser,
   listTrackedUsers,
   removeTrackedUser,
+  setServiceChannel,
 } from './database.js';
 import { createTranslationQueue } from './services/translationQueue.js';
 
@@ -92,6 +93,59 @@ client.on(Events.InteractionCreate, async (interaction) => {
       allowedMentions: { users: [] },
       ephemeral: true,
     });
+    return;
+  }
+
+  if (interaction.commandName === 'servicechannel') {
+    const channel = interaction.options.getChannel('channel', true);
+
+    if (channel.type !== ChannelType.GuildText) {
+      await interaction.reply({
+        content: 'Please choose a regular text channel.',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    setServiceChannel({
+      guildId: interaction.guildId,
+      channelId: channel.id,
+      setBy: interaction.user.id,
+    });
+
+    try {
+      await channel.send(
+        'Giberrator service channel test: I can send messages here.',
+      );
+
+      await interaction.reply({
+        content: `Service channel set to ${channel}. Test message sent successfully.`,
+        allowedMentions: { users: [], roles: [] },
+        ephemeral: true,
+      });
+    } catch (error) {
+      console.error(
+        `Failed to send service channel test in guild ${interaction.guildId}, channel ${channel.id}:`,
+        error,
+      );
+
+      await interaction.reply({
+        content: `Service channel set to ${channel}, but I could not send the test message there. I will DM you the details.`,
+        allowedMentions: { users: [], roles: [] },
+        ephemeral: true,
+      });
+
+      try {
+        await interaction.user.send(
+          `I could not send the Giberrator service test message in ${channel} for ${interaction.guild.name}. Please check that I have View Channel and Send Messages permissions there.`,
+        );
+      } catch (dmError) {
+        console.error(
+          `Failed to DM service channel permission issue to user ${interaction.user.id}:`,
+          dmError,
+        );
+      }
+    }
   }
 });
 
