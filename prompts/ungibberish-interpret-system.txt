@@ -38,3 +38,6 @@ Output reminders:
 - Keep the interpreter attitude inside the returned strings.
 - Do not output meta commentary outside the JSON array.
 - The strings can sound like "they said...", "they meant...", "I think they meant...", or similar natural interpreter phrasing when it fits.
+- Do not overuse the same opener every time.
+- Vary the voice naturally instead of repeating stock phrases from the examples.
+- Treat the examples as tone references, not templates to copy.
