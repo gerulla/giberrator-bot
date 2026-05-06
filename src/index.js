@@ -28,6 +28,10 @@ function log(scope, message, details) {
   console.log(`[${timestamp}] [${scope}] ${message}${suffix}`);
 }
 
+function getTranslationMode(triggerMessage) {
+  return /\binterpret\b/i.test(triggerMessage.content) ? 'interpret' : 'translate';
+}
+
 async function notifyServiceChannel(message, content) {
   const serviceChannelId = getServiceChannel({ guildId: message.guildId });
 
@@ -280,9 +284,12 @@ client.on(Events.MessageCreate, async (message) => {
     return [];
   });
 
+  const mode = getTranslationMode(message);
+
   translationQueue.enqueue({
     message: referencedMessage,
     history,
+    mode,
   });
 
   log('message', 'Queued referenced message for translation', {
@@ -291,6 +298,7 @@ client.on(Events.MessageCreate, async (message) => {
     messageId: referencedMessage.id,
     authorId: referencedMessage.author.id,
     historyCount: history.length,
+    mode,
   });
 });
 

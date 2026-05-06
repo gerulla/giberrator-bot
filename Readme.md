@@ -50,6 +50,13 @@ User A: some txt thts typod
 User B replies to User A and says: @Giberrator
 ```
 
+Interpreter-style trigger:
+
+```text
+User A: some txt thts typod
+User B replies to User A and says: @Giberrator interpret
+```
+
 The translator also receives recent chat context from the same channel. By default it includes the previous `15` non-bot messages, and you can change that per server with `/sethistorysize`.
 
 Before translation starts, Giberrator logs the picked-up message to the configured service channel in this format:
@@ -98,6 +105,7 @@ The bot needs the Message Content intent enabled in the Discord Developer Portal
 ## Translation Service
 
 The service prompt lives in `prompts/ungibberish-system.txt`.
+The interpreter-style prompt lives in `prompts/ungibberish-interpret-system.txt`.
 
 FFXIV-specific glossary/context lives in `prompts/ffxiv-reference.txt`. The translator appends that reference file to the system prompt so common job names, races, places, shorthand, and community terms are treated as known terms instead of random gibberish.
 

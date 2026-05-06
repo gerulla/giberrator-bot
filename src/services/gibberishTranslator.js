@@ -4,12 +4,15 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultPromptPath = path.resolve(__dirname, '../../prompts/ungibberish-system.txt');
+const defaultInterpretPromptPath = path.resolve(__dirname, '../../prompts/ungibberish-interpret-system.txt');
 const defaultReferencePath = path.resolve(__dirname, '../../prompts/ffxiv-reference.txt');
 
 const ollamaBaseUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
 const ollamaModel = process.env.OLLAMA_MODEL;
 const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 30000);
 const promptPath = process.env.UNGIBBERISH_PROMPT_PATH ?? defaultPromptPath;
+const interpretPromptPath =
+  process.env.UNGIBBERISH_INTERPRET_PROMPT_PATH ?? defaultInterpretPromptPath;
 const referencePath = process.env.UNGIBBERISH_REFERENCE_PATH ?? defaultReferencePath;
 const translationSchema = {
   type: 'array',
@@ -37,28 +40,38 @@ function createTranslationError(message, cause) {
   return error;
 }
 
-let systemPromptPromise;
+const systemPromptPromises = new Map();
 
-async function buildSystemPrompt() {
+function getPromptPath(mode) {
+  return mode === 'interpret' ? interpretPromptPath : promptPath;
+}
+
+async function buildSystemPrompt(mode) {
+  const selectedPromptPath = getPromptPath(mode);
   log('translator', 'Loading translator prompt files', {
-    promptPath,
+    mode,
+    promptPath: selectedPromptPath,
     referencePath,
   });
   const [prompt, reference] = await Promise.all([
-    fs.readFile(promptPath, 'utf8'),
+    fs.readFile(selectedPromptPath, 'utf8'),
     fs.readFile(referencePath, 'utf8').catch(() => ''),
   ]);
 
   log('translator', 'Loaded translator prompt files', {
+    mode,
     promptLength: prompt.length,
     referenceLength: reference.length,
   });
   return reference.trim() ? `${prompt.trim()}\n\n${reference.trim()}\n` : prompt;
 }
 
-function getSystemPrompt() {
-  systemPromptPromise ??= buildSystemPrompt();
-  return systemPromptPromise;
+function getSystemPrompt(mode) {
+  if (!systemPromptPromises.has(mode)) {
+    systemPromptPromises.set(mode, buildSystemPrompt(mode));
+  }
+
+  return systemPromptPromises.get(mode);
 }
 
 function normalizeBaseUrl(baseUrl) {
@@ -156,6 +169,7 @@ function buildUserPrompt(job) {
 
 export async function translateGibberish(job) {
   const input = buildUserPrompt(job);
+  const mode = job?.mode === 'interpret' ? 'interpret' : 'translate';
 
   if (!input) {
     log('translator', 'Skipping translation because input was empty');
@@ -164,6 +178,7 @@ export async function translateGibberish(job) {
 
   log('translator', 'Starting translation request', {
     model: ollamaModel,
+    mode,
     baseUrl: normalizeBaseUrl(ollamaBaseUrl),
     inputLength: input.length,
     historyCount: Array.isArray(job?.history) ? job.history.length : 0,
@@ -188,7 +203,7 @@ export async function translateGibberish(job) {
           messages: [
             {
               role: 'system',
-              content: await getSystemPrompt(),
+              content: await getSystemPrompt(mode),
             },
             {
               role: 'user',
@@ -226,6 +241,7 @@ export async function translateGibberish(job) {
 
     log('translator', 'Received Ollama HTTP response', {
       status: response.status,
+      mode,
       targetMessageId: job?.message?.id ?? null,
     });
 
@@ -246,6 +262,7 @@ export async function translateGibberish(job) {
 
     log('translator', 'Completed translation request', {
       targetMessageId: job?.message?.id ?? null,
+      mode,
       translationCount: translations.length,
     });
 
