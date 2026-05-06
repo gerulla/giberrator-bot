@@ -18,42 +18,77 @@ User: i cnat evn typw thsi rn
 Giberrator: I can't even type this right now.
 ```
 
-## Planned Usage
+## Current Usage
 
-Once the bot is implemented, Giberrator should be able to listen for messages or respond to commands, then return a cleaned-up translation.
-
-Example command idea:
+Giberrator currently includes a simple Discord.js slash command:
 
 ```text
-/translate i hve no idae waht im sayign
+/ping
 ```
 
 Expected response:
 
 ```text
-I have no idea what I'm saying.
+Pong!
 ```
+
+Future commands can build on this scaffold to translate gibberish messages into readable text.
 
 ## Setup
 
-Project setup instructions will depend on the final bot implementation.
-
-Typical setup will include:
-
-1. Creating a Discord application and bot token in the Discord Developer Portal
-2. Adding the bot token to an environment variable
-3. Installing project dependencies
-4. Running the bot locally or on a server
+1. Create a Discord application in the Discord Developer Portal
+2. Create a bot for the application
+3. Copy `.env.example` to `.env`
+4. Fill in your Discord bot token and application client ID
+5. Invite the bot to your server with the `bot` and `applications.commands` scopes
 
 ## Environment Variables
 
-The bot will likely require:
-
 ```text
 DISCORD_TOKEN=your_discord_bot_token
+DISCORD_CLIENT_ID=your_discord_application_client_id
+DISCORD_GUILD_ID=your_test_server_id
 ```
 
+`DISCORD_GUILD_ID` is optional, but recommended during development because guild commands update faster than global commands.
+
 Keep tokens private and never commit them to the repository.
+
+## Running Locally
+
+Install dependencies:
+
+```sh
+npm install
+```
+
+Register slash commands:
+
+```sh
+npm run register
+```
+
+Start the bot:
+
+```sh
+npm start
+```
+
+## Running With Docker
+
+Build and start the bot:
+
+```sh
+docker compose up --build
+```
+
+Register slash commands from inside the container:
+
+```sh
+docker compose run --rm giberrator npm run register
+```
+
+After registration completes, use `/ping` in Discord and the bot will reply with `Pong!`.
 
 ## Contributing
 
