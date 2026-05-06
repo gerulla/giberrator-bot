@@ -1,6 +1,12 @@
 import 'dotenv/config';
 import { Client, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
-import { addTrackedUser, listTrackedUsers, removeTrackedUser } from './database.js';
+import {
+  addTrackedUser,
+  isTrackedUser,
+  listTrackedUsers,
+  removeTrackedUser,
+} from './database.js';
+import { createTranslationQueue } from './services/translationQueue.js';
 
 const token = process.env.DISCORD_TOKEN;
 
@@ -9,8 +15,14 @@ if (!token) {
 }
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
+
+const translationQueue = createTranslationQueue();
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
@@ -89,6 +101,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
       ephemeral: true,
     });
   }
+});
+
+client.on(Events.MessageCreate, (message) => {
+  if (!message.inGuild() || message.author.bot || !message.content.trim()) {
+    return;
+  }
+
+  const shouldTranslate = isTrackedUser({
+    guildId: message.guildId,
+    userId: message.author.id,
+  });
+
+  if (!shouldTranslate) {
+    return;
+  }
+
+  translationQueue.enqueue(message);
 });
 
 client.login(token);

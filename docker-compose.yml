@@ -3,6 +3,8 @@ services:
     build: .
     env_file:
       - .env
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

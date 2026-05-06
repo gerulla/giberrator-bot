@@ -42,7 +42,7 @@ It also includes two server management commands for choosing whose messages shou
 
 These commands require the Manage Server permission. Tracked users are stored in a local SQLite database, and `/users` lists the users currently tracked for the server.
 
-Future message handling can build on this list to translate selected users' gibberish messages into readable text.
+When a tracked user sends a new server message, Giberrator queues it for translation, sends it to the configured local Ollama server, then replies with either the best readable translation or up to three likely translations.
 
 ## Setup
 
@@ -59,13 +59,43 @@ DISCORD_TOKEN=your_discord_bot_token
 DISCORD_CLIENT_ID=your_discord_application_client_id
 DISCORD_GUILD_ID=your_test_server_id
 GIBERRATOR_DB_PATH=data/giberrator.sqlite
+OLLAMA_MODEL=llama3.2
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_TIMEOUT_MS=30000
+UNGIBBERISH_PROMPT_PATH=prompts/ungibberish-system.txt
+TRANSLATION_QUEUE_MAX_SIZE=100
 ```
 
 `DISCORD_GUILD_ID` is optional, but recommended during development because guild commands update faster than global commands.
 
 `GIBERRATOR_DB_PATH` is optional and defaults to `data/giberrator.sqlite`.
 
+`OLLAMA_MODEL` is required for the translation service. `OLLAMA_BASE_URL` defaults to `http://localhost:11434` locally. When running with Docker Compose, the compose file defaults it to `http://host.docker.internal:11434` so the container can reach Ollama running on your machine.
+
+`TRANSLATION_QUEUE_MAX_SIZE` is optional and defaults to `100`.
+
 Keep tokens private and never commit them to the repository.
+
+The bot needs the Message Content intent enabled in the Discord Developer Portal because it reads message text from tracked users.
+
+## Translation Service
+
+The service prompt lives in `prompts/ungibberish-system.txt`.
+
+The backend translator accepts a string and returns a JSON array of one to three readable translations:
+
+```js
+import { translateGibberish } from './src/services/gibberishTranslator.js';
+
+const translations = await translateGibberish('i cnat evn typw thsi rn');
+// ["I can't even type this right now."]
+```
+
+You can test it manually while Ollama is running:
+
+```sh
+npm run translate -- "i cnat evn typw thsi rn"
+```
 
 ## Running Locally
 
