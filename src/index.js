@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Client, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
+import { Client, Events, GatewayIntentBits } from 'discord.js';
 import {
   addTrackedUser,
   isTrackedUser,
@@ -41,14 +41,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.inCachedGuild()) {
     await interaction.reply({
       content: 'This command can only be used in a server.',
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageGuild)) {
-    await interaction.reply({
-      content: 'You need the Manage Server permission to manage tracked users.',
       ephemeral: true,
     });
     return;

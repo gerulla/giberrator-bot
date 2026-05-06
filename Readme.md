@@ -40,7 +40,7 @@ It also includes two server management commands for choosing whose messages shou
 /users
 ```
 
-These commands require the Manage Server permission. Tracked users are stored in a local SQLite database, and `/users` lists the users currently tracked for the server.
+Tracked users are stored in a local SQLite database, and `/users` lists the users currently tracked for the server.
 
 When a tracked user sends a new server message, Giberrator queues it for translation, sends it to the configured local Ollama server, then replies with either the best readable translation or up to three likely translations.
 
