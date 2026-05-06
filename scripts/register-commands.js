@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { PermissionFlagsBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.DISCORD_CLIENT_ID;
@@ -17,6 +17,33 @@ const commands = [
   new SlashCommandBuilder()
     .setName('ping')
     .setDescription('Replies with Pong!')
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('adduser')
+    .setDescription('Adds a user to the un-gibberize list.')
+    .addUserOption((option) =>
+      option
+        .setName('user')
+        .setDescription('The user whose messages should be un-gibberized.')
+        .setRequired(true),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('removeuser')
+    .setDescription('Removes a user from the un-gibberize list.')
+    .addUserOption((option) =>
+      option
+        .setName('user')
+        .setDescription('The user whose messages should no longer be un-gibberized.')
+        .setRequired(true),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('users')
+    .setDescription('Lists users currently on the un-gibberize list.')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .toJSON(),
 ];
 

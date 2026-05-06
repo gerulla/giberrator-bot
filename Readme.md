@@ -32,7 +32,17 @@ Expected response:
 Pong!
 ```
 
-Future commands can build on this scaffold to translate gibberish messages into readable text.
+It also includes two server management commands for choosing whose messages should eventually be un-gibberized:
+
+```text
+/adduser user:@someone
+/removeuser user:@someone
+/users
+```
+
+These commands require the Manage Server permission. Tracked users are stored in a local SQLite database, and `/users` lists the users currently tracked for the server.
+
+Future message handling can build on this list to translate selected users' gibberish messages into readable text.
 
 ## Setup
 
@@ -48,9 +58,12 @@ Future commands can build on this scaffold to translate gibberish messages into 
 DISCORD_TOKEN=your_discord_bot_token
 DISCORD_CLIENT_ID=your_discord_application_client_id
 DISCORD_GUILD_ID=your_test_server_id
+GIBERRATOR_DB_PATH=data/giberrator.sqlite
 ```
 
 `DISCORD_GUILD_ID` is optional, but recommended during development because guild commands update faster than global commands.
+
+`GIBERRATOR_DB_PATH` is optional and defaults to `data/giberrator.sqlite`.
 
 Keep tokens private and never commit them to the repository.
 
@@ -89,6 +102,8 @@ docker compose run --rm giberrator npm run register
 ```
 
 After registration completes, use `/ping` in Discord and the bot will reply with `Pong!`.
+
+The Docker Compose setup mounts `./data` to `/app/data` so the SQLite database persists between container rebuilds.
 
 ## Contributing
 
