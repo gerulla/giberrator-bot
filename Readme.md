@@ -45,6 +45,8 @@ Tracked users are stored in a local SQLite database, and `/users` lists the user
 
 `/servicechannel` stores a server service channel and sends a test message there. If the bot cannot send the test message, it will try to DM the user who ran the command with the permission issue.
 
+Any non-bot message sent in the configured service channel is resent by Giberrator. This provides a simple live check that the bot is receiving Discord messages and can send to that channel.
+
 When a tracked user sends a new server message, Giberrator queues it for translation, sends it to the configured local Ollama server, then replies with either the best readable translation or up to three likely translations.
 
 ## Setup

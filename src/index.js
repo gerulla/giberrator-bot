@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ChannelType, Client, Events, GatewayIntentBits } from 'discord.js';
 import {
   addTrackedUser,
+  getServiceChannel,
   isTrackedUser,
   listTrackedUsers,
   removeTrackedUser,
@@ -24,6 +25,21 @@ const client = new Client({
 });
 
 const translationQueue = createTranslationQueue();
+
+function formatMessageForResend(message) {
+  const parts = [];
+  const content = message.content.trim();
+
+  if (content) {
+    parts.push(content);
+  }
+
+  for (const attachment of message.attachments.values()) {
+    parts.push(attachment.url);
+  }
+
+  return parts.join('\n');
+}
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
@@ -150,7 +166,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 client.on(Events.MessageCreate, (message) => {
-  if (!message.inGuild() || message.author.bot || !message.content.trim()) {
+  if (!message.inGuild() || message.author.bot) {
+    return;
+  }
+
+  const serviceChannelId = getServiceChannel({ guildId: message.guildId });
+
+  if (serviceChannelId === message.channelId) {
+    const content = formatMessageForResend(message);
+
+    if (content) {
+      void message.channel.send({
+        content,
+        allowedMentions: { users: [], roles: [], repliedUser: false },
+      });
+    }
+
+    return;
+  }
+
+  if (!message.content.trim()) {
     return;
   }
 
