@@ -43,7 +43,7 @@ function createTranslationError(message, cause) {
 const systemPromptPromises = new Map();
 
 function getPromptPath(mode) {
-  return mode === 'interpret' ? interpretPromptPath : promptPath;
+  return mode === 'translate' ? promptPath : interpretPromptPath;
 }
 
 async function buildSystemPrompt(mode) {
@@ -169,7 +169,7 @@ function buildUserPrompt(job) {
 
 export async function translateGibberish(job) {
   const input = buildUserPrompt(job);
-  const mode = job?.mode === 'interpret' ? 'interpret' : 'translate';
+  const mode = job?.mode === 'translate' ? 'translate' : 'interpret';
 
   if (!input) {
     log('translator', 'Skipping translation because input was empty');

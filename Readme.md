@@ -41,7 +41,7 @@ It includes a few utility commands:
 
 `/servicechannel` stores a server service channel and sends a test message there. If the bot cannot send the test message, it will try to DM the user who ran the command with the permission issue.
 
-When someone replies to a message and mentions the bot, Giberrator queues the replied-to message for translation, sends it to the configured local Ollama server, then replies with either the best readable translation or up to three likely translations.
+When someone replies to a message and mentions the bot, Giberrator queues the replied-to message for interpretation, sends it to the configured local Ollama server, then replies with either the best readable interpretation or up to three likely interpretations.
 
 Example trigger:
 
@@ -50,11 +50,11 @@ User A: some txt thts typod
 User B replies to User A and says: @Giberrator
 ```
 
-Interpreter-style trigger:
+Sanitized translation trigger:
 
 ```text
 User A: some txt thts typod
-User B replies to User A and says: @Giberrator interpret
+User B replies to User A and says: @Giberrator translate
 ```
 
 The translator also receives recent chat context from the same channel. By default it includes the previous `15` non-bot messages, and you can change that per server with `/sethistorysize`.
@@ -104,8 +104,8 @@ The bot needs the Message Content intent enabled in the Discord Developer Portal
 
 ## Translation Service
 
-The service prompt lives in `prompts/ungibberish-system.txt`.
-The interpreter-style prompt lives in `prompts/ungibberish-interpret-system.txt`.
+The default interpreter-style prompt lives in `prompts/ungibberish-interpret-system.txt`.
+The simpler sanitized translation prompt lives in `prompts/ungibberish-system.txt`.
 
 FFXIV-specific glossary/context lives in `prompts/ffxiv-reference.txt`. The translator appends that reference file to the system prompt so common job names, races, places, shorthand, and community terms are treated as known terms instead of random gibberish.
 

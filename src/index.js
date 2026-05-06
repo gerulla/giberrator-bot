@@ -29,7 +29,7 @@ function log(scope, message, details) {
 }
 
 function getTranslationMode(triggerMessage) {
-  return /\binterpret\b/i.test(triggerMessage.content) ? 'interpret' : 'translate';
+  return /\btranslate\b/i.test(triggerMessage.content) ? 'translate' : 'interpret';
 }
 
 async function notifyServiceChannel(message, content) {
