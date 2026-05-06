@@ -1,12 +1,8 @@
 import 'dotenv/config';
 import { ChannelType, Client, Events, GatewayIntentBits } from 'discord.js';
 import {
-  addTrackedUser,
   getHistorySize,
   getServiceChannel,
-  isTrackedUser,
-  listTrackedUsers,
-  removeTrackedUser,
   setHistorySize,
   setServiceChannel,
 } from './database.js';
@@ -106,55 +102,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  if (interaction.commandName === 'adduser') {
-    const user = interaction.options.getUser('user', true);
-    const wasAdded = addTrackedUser({
-      guildId: interaction.guildId,
-      userId: user.id,
-      createdBy: interaction.user.id,
-    });
-
-    await interaction.reply({
-      content: wasAdded
-        ? `Added ${user} to the un-gibberize list.`
-        : `${user} is already on the un-gibberize list.`,
-      allowedMentions: { users: [] },
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (interaction.commandName === 'removeuser') {
-    const user = interaction.options.getUser('user', true);
-    const wasRemoved = removeTrackedUser({
-      guildId: interaction.guildId,
-      userId: user.id,
-    });
-
-    await interaction.reply({
-      content: wasRemoved
-        ? `Removed ${user} from the un-gibberize list.`
-        : `${user} was not on the un-gibberize list.`,
-      allowedMentions: { users: [] },
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (interaction.commandName === 'users') {
-    const userIds = listTrackedUsers({ guildId: interaction.guildId });
-    const content = userIds.length > 0
-      ? `Un-gibberize list:\n${userIds.map((userId) => `- <@${userId}>`).join('\n')}`
-      : 'No users are currently on the un-gibberize list.';
-
-    await interaction.reply({
-      content,
-      allowedMentions: { users: [] },
-      ephemeral: true,
-    });
-    return;
-  }
-
   if (interaction.commandName === 'servicechannel') {
     const channel = interaction.options.getChannel('channel', true);
 
@@ -229,29 +176,32 @@ client.on(Events.MessageCreate, async (message) => {
     return;
   }
 
-  if (!message.content.trim()) {
+  if (!message.mentions.users.has(client.user.id) || !message.reference?.messageId) {
     return;
   }
 
-  const shouldTranslate = isTrackedUser({
-    guildId: message.guildId,
-    userId: message.author.id,
+  const referencedMessage = await message.fetchReference().catch((error) => {
+    console.error(
+      `Failed to fetch referenced message for trigger ${message.id} in guild ${message.guildId}:`,
+      error,
+    );
+    return null;
   });
 
-  if (!shouldTranslate) {
+  if (!referencedMessage || referencedMessage.author.bot || !describeMessage(referencedMessage)) {
     return;
   }
 
-  const history = await getMessageHistory(message).catch((error) => {
+  const history = await getMessageHistory(referencedMessage).catch((error) => {
     console.error(
-      `Failed to fetch message history for message ${message.id} in guild ${message.guildId}:`,
+      `Failed to fetch message history for message ${referencedMessage.id} in guild ${referencedMessage.guildId}:`,
       error,
     );
     return [];
   });
 
   translationQueue.enqueue({
-    message,
+    message: referencedMessage,
     history,
   });
 });

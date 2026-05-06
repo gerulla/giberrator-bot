@@ -42,6 +42,26 @@ function formatTranslationError(message, error) {
   ].join('\n');
 }
 
+async function withTyping(message, task) {
+  const channel = message.channel;
+
+  if (!channel?.sendTyping) {
+    return task();
+  }
+
+  await channel.sendTyping().catch(() => {});
+
+  const interval = setInterval(() => {
+    void channel.sendTyping().catch(() => {});
+  }, 8000);
+
+  try {
+    return await task();
+  } finally {
+    clearInterval(interval);
+  }
+}
+
 export function createTranslationQueue({
   translator = translateGibberish,
   maxQueueSize = defaultMaxQueueSize,
@@ -63,7 +83,7 @@ export function createTranslationQueue({
 
         try {
           await notifyServiceChannel(job.message, truncateForNotification(formatProcessLog(job.message)));
-          const translations = await translator(job);
+          const translations = await withTyping(job.message, () => translator(job));
 
           if (translations.length === 0) {
             continue;

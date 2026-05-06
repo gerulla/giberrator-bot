@@ -19,30 +19,6 @@ const commands = [
     .setDescription('Replies with Pong!')
     .toJSON(),
   new SlashCommandBuilder()
-    .setName('adduser')
-    .setDescription('Adds a user to the un-gibberize list.')
-    .addUserOption((option) =>
-      option
-        .setName('user')
-        .setDescription('The user whose messages should be un-gibberized.')
-        .setRequired(true),
-    )
-    .toJSON(),
-  new SlashCommandBuilder()
-    .setName('removeuser')
-    .setDescription('Removes a user from the un-gibberize list.')
-    .addUserOption((option) =>
-      option
-        .setName('user')
-        .setDescription('The user whose messages should no longer be un-gibberized.')
-        .setRequired(true),
-    )
-    .toJSON(),
-  new SlashCommandBuilder()
-    .setName('users')
-    .setDescription('Lists users currently on the un-gibberize list.')
-    .toJSON(),
-  new SlashCommandBuilder()
     .setName('servicechannel')
     .setDescription('Sets the channel Giberrator uses for service messages.')
     .addChannelOption((option) =>

@@ -32,21 +32,23 @@ Expected response:
 Pong!
 ```
 
-It also includes two server management commands for choosing whose messages should eventually be un-gibberized:
+It includes a few utility commands:
 
 ```text
-/adduser user:@someone
-/removeuser user:@someone
-/users
 /servicechannel channel:#channel
 /sethistorysize size:15
 ```
 
-Tracked users are stored in a local SQLite database, and `/users` lists the users currently tracked for the server.
-
 `/servicechannel` stores a server service channel and sends a test message there. If the bot cannot send the test message, it will try to DM the user who ran the command with the permission issue.
 
-When a tracked user sends a new server message, Giberrator queues it for translation, sends it to the configured local Ollama server, then replies with either the best readable translation or up to three likely translations.
+When someone replies to a message and mentions the bot, Giberrator queues the replied-to message for translation, sends it to the configured local Ollama server, then replies with either the best readable translation or up to three likely translations.
+
+Example trigger:
+
+```text
+User A: some txt thts typod
+User B replies to User A and says: @Giberrator
+```
 
 The translator also receives recent chat context from the same channel. By default it includes the previous `15` non-bot messages, and you can change that per server with `/sethistorysize`.
 
