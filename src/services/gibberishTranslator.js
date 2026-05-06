@@ -14,6 +14,13 @@ if (!ollamaModel) {
   throw new Error('Missing OLLAMA_MODEL environment variable.');
 }
 
+function createTranslationError(message, cause) {
+  const error = new Error(message);
+  error.name = 'TranslationError';
+  error.cause = cause;
+  return error;
+}
+
 let systemPromptPromise;
 
 function getSystemPrompt() {
@@ -41,13 +48,21 @@ function extractJsonArray(text) {
   const end = trimmed.lastIndexOf(']');
 
   if (start === -1 || end === -1 || end <= start) {
-    throw new Error(`Ollama response did not contain a JSON array: ${trimmed}`);
+    throw createTranslationError(
+      `Ollama response did not contain a JSON array: ${trimmed}`,
+    );
   }
 
-  const parsed = JSON.parse(trimmed.slice(start, end + 1));
+  let parsed;
+
+  try {
+    parsed = JSON.parse(trimmed.slice(start, end + 1));
+  } catch (error) {
+    throw createTranslationError('Failed to parse JSON array from Ollama response.', error);
+  }
 
   if (!Array.isArray(parsed)) {
-    throw new Error('Ollama response JSON was not an array.');
+    throw createTranslationError('Ollama response JSON was not an array.');
   }
 
   return parsed;
@@ -72,31 +87,56 @@ export async function translateGibberish(text) {
   const timeout = setTimeout(() => controller.abort(), ollamaTimeoutMs);
 
   try {
-    const response = await fetch(`${normalizeBaseUrl(ollamaBaseUrl)}/api/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: ollamaModel,
-        system: await getSystemPrompt(),
-        prompt: input,
-        stream: false,
-        format: 'json',
-      }),
-      signal: controller.signal,
-    });
+    let response;
+
+    try {
+      response = await fetch(`${normalizeBaseUrl(ollamaBaseUrl)}/api/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: ollamaModel,
+          system: await getSystemPrompt(),
+          prompt: input,
+          stream: false,
+          format: 'json',
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        throw createTranslationError(
+          `Ollama request timed out after ${ollamaTimeoutMs}ms.`,
+          error,
+        );
+      }
+
+      throw createTranslationError(
+        `Failed to connect to Ollama at ${normalizeBaseUrl(ollamaBaseUrl)}.`,
+        error,
+      );
+    }
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Ollama request failed with ${response.status}: ${body}`);
+      throw createTranslationError(
+        `Ollama request failed with ${response.status}: ${body}`,
+      );
     }
 
-    const data = await response.json();
+    let data;
+
+    try {
+      data = await response.json();
+    } catch (error) {
+      throw createTranslationError('Failed to parse Ollama HTTP response as JSON.', error);
+    }
+
     const translations = normalizeTranslations(extractJsonArray(data.response ?? ''));
 
     if (translations.length === 0) {
-      throw new Error('Ollama returned an empty translation array.');
+      throw createTranslationError('Ollama returned an empty translation array.');
     }
 
     return translations;

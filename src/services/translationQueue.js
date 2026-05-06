@@ -12,9 +12,40 @@ function formatTranslations(translations) {
     .join('\n');
 }
 
+function truncateForNotification(text, maxLength = 1500) {
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 3)}...`;
+}
+
+function describeMessage(message) {
+  const parts = [];
+  const content = message.content.trim();
+
+  if (content) {
+    parts.push(content);
+  }
+
+  for (const attachment of message.attachments?.values?.() ?? []) {
+    parts.push(attachment.url);
+  }
+
+  return parts.join('\n') || '[no text content]';
+}
+
+function formatProcessLog(message) {
+  return `Ungibberizing ${message.author.username}'s message: ${describeMessage(message)}`;
+}
+
+function formatTranslationError(message, error) {
+  return [
+    `Ungibberizing failed for ${message.author.username}'s message: ${describeMessage(message)}`,
+    `Error: ${error.message}`,
+  ].join('\n');
+}
+
 export function createTranslationQueue({
   translator = translateGibberish,
   maxQueueSize = defaultMaxQueueSize,
+  notifyServiceChannel = async () => {},
 } = {}) {
   const queue = [];
   let isProcessing = false;
@@ -31,6 +62,7 @@ export function createTranslationQueue({
         const job = queue.shift();
 
         try {
+          await notifyServiceChannel(job.message, truncateForNotification(formatProcessLog(job.message)));
           const translations = await translator(job.message.content);
 
           if (translations.length === 0) {
@@ -45,6 +77,11 @@ export function createTranslationQueue({
           console.error(
             `Failed to translate message ${job.message.id} in guild ${job.message.guildId}:`,
             error,
+          );
+
+          await notifyServiceChannel(
+            job.message,
+            truncateForNotification(formatTranslationError(job.message, error)),
           );
         }
       }

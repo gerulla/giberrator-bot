@@ -24,8 +24,6 @@ const client = new Client({
   ],
 });
 
-const translationQueue = createTranslationQueue();
-
 function formatMessageForResend(message) {
   const parts = [];
   const content = message.content.trim();
@@ -40,6 +38,35 @@ function formatMessageForResend(message) {
 
   return parts.join('\n');
 }
+
+async function notifyServiceChannel(message, content) {
+  const serviceChannelId = getServiceChannel({ guildId: message.guildId });
+
+  if (!serviceChannelId || serviceChannelId === message.channelId) {
+    return;
+  }
+
+  const serviceChannel = await client.channels.fetch(serviceChannelId).catch((error) => {
+    console.error(
+      `Failed to fetch service channel ${serviceChannelId} for guild ${message.guildId}:`,
+      error,
+    );
+    return null;
+  });
+
+  if (!serviceChannel?.isTextBased()) {
+    return;
+  }
+
+  await serviceChannel.send({
+    content,
+    allowedMentions: { users: [], roles: [], repliedUser: false },
+  });
+}
+
+const translationQueue = createTranslationQueue({
+  notifyServiceChannel,
+});
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);

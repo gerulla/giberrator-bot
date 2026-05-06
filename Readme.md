@@ -49,6 +49,14 @@ Any non-bot message sent in the configured service channel is resent by Giberrat
 
 When a tracked user sends a new server message, Giberrator queues it for translation, sends it to the configured local Ollama server, then replies with either the best readable translation or up to three likely translations.
 
+Before translation starts, Giberrator logs the picked-up message to the configured service channel in this format:
+
+```text
+Ungibberizing Users's message: <message>
+```
+
+If Ollama translation fails for any reason, Giberrator sends that error to the service channel as a notification.
+
 ## Setup
 
 1. Create a Discord application in the Discord Developer Portal
