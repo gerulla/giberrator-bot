@@ -4,11 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultPromptPath = path.resolve(__dirname, '../../prompts/ungibberish-system.txt');
+const defaultReferencePath = path.resolve(__dirname, '../../prompts/ffxiv-reference.txt');
 
 const ollamaBaseUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
 const ollamaModel = process.env.OLLAMA_MODEL;
 const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 30000);
 const promptPath = process.env.UNGIBBERISH_PROMPT_PATH ?? defaultPromptPath;
+const referencePath = process.env.UNGIBBERISH_REFERENCE_PATH ?? defaultReferencePath;
 const translationSchema = {
   type: 'array',
   items: {
@@ -31,8 +33,17 @@ function createTranslationError(message, cause) {
 
 let systemPromptPromise;
 
+async function buildSystemPrompt() {
+  const [prompt, reference] = await Promise.all([
+    fs.readFile(promptPath, 'utf8'),
+    fs.readFile(referencePath, 'utf8').catch(() => ''),
+  ]);
+
+  return reference.trim() ? `${prompt.trim()}\n\n${reference.trim()}\n` : prompt;
+}
+
 function getSystemPrompt() {
-  systemPromptPromise ??= fs.readFile(promptPath, 'utf8');
+  systemPromptPromise ??= buildSystemPrompt();
   return systemPromptPromise;
 }
 
@@ -105,8 +116,32 @@ function normalizeTranslations(value) {
     .slice(0, 3);
 }
 
-export async function translateGibberish(text) {
-  const input = text?.trim();
+function buildUserPrompt(job) {
+  if (typeof job === 'string') {
+    return job.trim();
+  }
+
+  const targetMessage = job?.message?.content?.trim();
+
+  if (!targetMessage) {
+    return '';
+  }
+
+  const history = Array.isArray(job.history) ? job.history : [];
+  const payload = {
+    instructions: 'Translate only the target message. Use the history only as context for meaning.',
+    history,
+    target_message: {
+      author: job.message.author?.username ?? 'Unknown',
+      content: targetMessage,
+    },
+  };
+
+  return JSON.stringify(payload);
+}
+
+export async function translateGibberish(job) {
+  const input = buildUserPrompt(job);
 
   if (!input) {
     return [];

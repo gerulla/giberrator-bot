@@ -39,6 +39,7 @@ It also includes two server management commands for choosing whose messages shou
 /removeuser user:@someone
 /users
 /servicechannel channel:#channel
+/sethistorysize size:15
 ```
 
 Tracked users are stored in a local SQLite database, and `/users` lists the users currently tracked for the server.
@@ -46,6 +47,8 @@ Tracked users are stored in a local SQLite database, and `/users` lists the user
 `/servicechannel` stores a server service channel and sends a test message there. If the bot cannot send the test message, it will try to DM the user who ran the command with the permission issue.
 
 When a tracked user sends a new server message, Giberrator queues it for translation, sends it to the configured local Ollama server, then replies with either the best readable translation or up to three likely translations.
+
+The translator also receives recent chat context from the same channel. By default it includes the previous `15` non-bot messages, and you can change that per server with `/sethistorysize`.
 
 Before translation starts, Giberrator logs the picked-up message to the configured service channel in this format:
 
@@ -74,6 +77,7 @@ OLLAMA_MODEL=llama3.2
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_TIMEOUT_MS=30000
 UNGIBBERISH_PROMPT_PATH=prompts/ungibberish-system.txt
+UNGIBBERISH_REFERENCE_PATH=prompts/ffxiv-reference.txt
 TRANSLATION_QUEUE_MAX_SIZE=100
 ```
 
@@ -92,6 +96,8 @@ The bot needs the Message Content intent enabled in the Discord Developer Portal
 ## Translation Service
 
 The service prompt lives in `prompts/ungibberish-system.txt`.
+
+FFXIV-specific glossary/context lives in `prompts/ffxiv-reference.txt`. The translator appends that reference file to the system prompt so common job names, races, places, shorthand, and community terms are treated as known terms instead of random gibberish.
 
 The backend translator accepts a string and returns a JSON array of one to three readable translations:
 

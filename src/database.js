@@ -27,9 +27,20 @@ db.run(`
     guild_id TEXT PRIMARY KEY,
     service_channel_id TEXT,
     service_channel_set_by TEXT,
-    service_channel_set_at TEXT
+    service_channel_set_at TEXT,
+    history_size INTEGER
   );
 `);
+
+try {
+  db.run(`
+    ALTER TABLE guild_settings ADD COLUMN history_size INTEGER;
+  `);
+} catch (error) {
+  if (!String(error.message).includes('duplicate column name')) {
+    throw error;
+  }
+}
 
 persist();
 
@@ -134,4 +145,37 @@ export function getServiceChannel({ guildId }) {
   }
 
   return result[0].values[0][0];
+}
+
+export function setHistorySize({ guildId, historySize }) {
+  db.run(
+    `
+      INSERT INTO guild_settings (guild_id, history_size)
+      VALUES (?, ?)
+      ON CONFLICT(guild_id) DO UPDATE SET
+        history_size = excluded.history_size;
+    `,
+    [guildId, historySize],
+  );
+
+  persist();
+}
+
+export function getHistorySize({ guildId }) {
+  const result = db.exec(
+    `
+      SELECT history_size
+      FROM guild_settings
+      WHERE guild_id = ?
+      LIMIT 1;
+    `,
+    [guildId],
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return 15;
+  }
+
+  const historySize = Number(result[0].values[0][0]);
+  return Number.isInteger(historySize) && historySize > 0 ? historySize : 15;
 }

@@ -63,7 +63,7 @@ export function createTranslationQueue({
 
         try {
           await notifyServiceChannel(job.message, truncateForNotification(formatProcessLog(job.message)));
-          const translations = await translator(job.message.content);
+          const translations = await translator(job);
 
           if (translations.length === 0) {
             continue;
@@ -90,15 +90,15 @@ export function createTranslationQueue({
     }
   }
 
-  function enqueue(message) {
+  function enqueue(job) {
     if (queue.length >= maxQueueSize) {
       console.warn(
-        `Translation queue is full. Dropping message ${message.id} in guild ${message.guildId}.`,
+        `Translation queue is full. Dropping message ${job.message.id} in guild ${job.message.guildId}.`,
       );
       return false;
     }
 
-    queue.push({ message });
+    queue.push(job);
     void processNext();
     return true;
   }

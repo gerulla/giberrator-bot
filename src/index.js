@@ -2,10 +2,12 @@ import 'dotenv/config';
 import { ChannelType, Client, Events, GatewayIntentBits } from 'discord.js';
 import {
   addTrackedUser,
+  getHistorySize,
   getServiceChannel,
   isTrackedUser,
   listTrackedUsers,
   removeTrackedUser,
+  setHistorySize,
   setServiceChannel,
 } from './database.js';
 import { createTranslationQueue } from './services/translationQueue.js';
@@ -52,6 +54,35 @@ async function notifyServiceChannel(message, content) {
 const translationQueue = createTranslationQueue({
   notifyServiceChannel,
 });
+
+function describeMessage(message) {
+  const parts = [];
+  const content = message.content.trim();
+
+  if (content) {
+    parts.push(content);
+  }
+
+  for (const attachment of message.attachments.values()) {
+    parts.push(attachment.url);
+  }
+
+  return parts.join('\n') || '[no text content]';
+}
+
+async function getMessageHistory(message) {
+  const historySize = getHistorySize({ guildId: message.guildId });
+  const fetchedMessages = await message.channel.messages.fetch({ limit: historySize + 1 });
+
+  return fetchedMessages
+    .filter((entry) => entry.id !== message.id && !entry.author.bot)
+    .sort((left, right) => left.createdTimestamp - right.createdTimestamp)
+    .map((entry) => ({
+      author: entry.author.username,
+      content: describeMessage(entry),
+    }))
+    .slice(-historySize);
+}
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
@@ -174,10 +205,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
         );
       }
     }
+
+    return;
+  }
+
+  if (interaction.commandName === 'sethistorysize') {
+    const historySize = interaction.options.getInteger('size', true);
+
+    setHistorySize({
+      guildId: interaction.guildId,
+      historySize,
+    });
+
+    await interaction.reply({
+      content: `History size set to ${historySize} messages.`,
+      ephemeral: true,
+    });
   }
 });
 
-client.on(Events.MessageCreate, (message) => {
+client.on(Events.MessageCreate, async (message) => {
   if (!message.inGuild() || message.author.bot) {
     return;
   }
@@ -195,7 +242,18 @@ client.on(Events.MessageCreate, (message) => {
     return;
   }
 
-  translationQueue.enqueue(message);
+  const history = await getMessageHistory(message).catch((error) => {
+    console.error(
+      `Failed to fetch message history for message ${message.id} in guild ${message.guildId}:`,
+      error,
+    );
+    return [];
+  });
+
+  translationQueue.enqueue({
+    message,
+    history,
+  });
 });
 
 client.login(token);

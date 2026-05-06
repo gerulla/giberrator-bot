@@ -53,6 +53,18 @@ const commands = [
         .setRequired(true),
     )
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('sethistorysize')
+    .setDescription('Sets how many previous channel messages are sent as translation context.')
+    .addIntegerOption((option) =>
+      option
+        .setName('size')
+        .setDescription('How many previous messages to include as context.')
+        .setMinValue(1)
+        .setMaxValue(50)
+        .setRequired(true),
+    )
+    .toJSON(),
 ];
 
 const rest = new REST({ version: '10' }).setToken(token);
