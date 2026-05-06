@@ -83,7 +83,7 @@ TRANSLATION_QUEUE_MAX_SIZE=100
 
 `GIBERRATOR_DB_PATH` is optional and defaults to `data/giberrator.sqlite`.
 
-`OLLAMA_MODEL` is required for the translation service. `OLLAMA_BASE_URL` defaults to `http://localhost:11434` locally. When running with Docker Compose, the compose file defaults it to `http://host.docker.internal:11434` so the container can reach Ollama running on your machine.
+`OLLAMA_MODEL` is required for the translation service. `OLLAMA_BASE_URL` defaults to `http://localhost:11434` locally. When running with Docker Compose, the compose file defaults it to `http://host.docker.internal:11434` and maps `host.docker.internal` to the host gateway so the container can reach Ollama running on your machine.
 
 `TRANSLATION_QUEUE_MAX_SIZE` is optional and defaults to `100`.
 
