@@ -20,6 +20,12 @@ const translationSchema = {
   maxItems: 3,
 };
 
+function log(scope, message, details) {
+  const timestamp = new Date().toISOString();
+  const suffix = details ? ` ${JSON.stringify(details)}` : '';
+  console.log(`[${timestamp}] [${scope}] ${message}${suffix}`);
+}
+
 if (!ollamaModel) {
   throw new Error('Missing OLLAMA_MODEL environment variable.');
 }
@@ -34,11 +40,19 @@ function createTranslationError(message, cause) {
 let systemPromptPromise;
 
 async function buildSystemPrompt() {
+  log('translator', 'Loading translator prompt files', {
+    promptPath,
+    referencePath,
+  });
   const [prompt, reference] = await Promise.all([
     fs.readFile(promptPath, 'utf8'),
     fs.readFile(referencePath, 'utf8').catch(() => ''),
   ]);
 
+  log('translator', 'Loaded translator prompt files', {
+    promptLength: prompt.length,
+    referenceLength: reference.length,
+  });
   return reference.trim() ? `${prompt.trim()}\n\n${reference.trim()}\n` : prompt;
 }
 
@@ -144,8 +158,18 @@ export async function translateGibberish(job) {
   const input = buildUserPrompt(job);
 
   if (!input) {
+    log('translator', 'Skipping translation because input was empty');
     return [];
   }
+
+  log('translator', 'Starting translation request', {
+    model: ollamaModel,
+    baseUrl: normalizeBaseUrl(ollamaBaseUrl),
+    inputLength: input.length,
+    historyCount: Array.isArray(job?.history) ? job.history.length : 0,
+    targetAuthor: job?.message?.author?.username ?? null,
+    targetMessageId: job?.message?.id ?? null,
+  });
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ollamaTimeoutMs);
@@ -200,6 +224,11 @@ export async function translateGibberish(job) {
       );
     }
 
+    log('translator', 'Received Ollama HTTP response', {
+      status: response.status,
+      targetMessageId: job?.message?.id ?? null,
+    });
+
     let data;
 
     try {
@@ -214,6 +243,11 @@ export async function translateGibberish(job) {
     if (translations.length === 0) {
       throw createTranslationError('Ollama returned an empty translation array.');
     }
+
+    log('translator', 'Completed translation request', {
+      targetMessageId: job?.message?.id ?? null,
+      translationCount: translations.length,
+    });
 
     return translations;
   } finally {

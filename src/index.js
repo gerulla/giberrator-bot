@@ -22,12 +22,28 @@ const client = new Client({
   ],
 });
 
+function log(scope, message, details) {
+  const timestamp = new Date().toISOString();
+  const suffix = details ? ` ${JSON.stringify(details)}` : '';
+  console.log(`[${timestamp}] [${scope}] ${message}${suffix}`);
+}
+
 async function notifyServiceChannel(message, content) {
   const serviceChannelId = getServiceChannel({ guildId: message.guildId });
 
   if (!serviceChannelId) {
+    log('service-channel', 'No service channel configured', {
+      guildId: message.guildId,
+      sourceMessageId: message.id,
+    });
     return;
   }
+
+  log('service-channel', 'Sending notification', {
+    guildId: message.guildId,
+    serviceChannelId,
+    sourceMessageId: message.id,
+  });
 
   const serviceChannel = await client.channels.fetch(serviceChannelId).catch((error) => {
     console.error(
@@ -68,9 +84,15 @@ function describeMessage(message) {
 
 async function getMessageHistory(message) {
   const historySize = getHistorySize({ guildId: message.guildId });
+  log('history', 'Fetching channel history', {
+    guildId: message.guildId,
+    channelId: message.channelId,
+    messageId: message.id,
+    historySize,
+  });
   const fetchedMessages = await message.channel.messages.fetch({ limit: historySize + 1 });
 
-  return fetchedMessages
+  const history = fetchedMessages
     .filter((entry) => entry.id !== message.id && !entry.author.bot)
     .sort((left, right) => left.createdTimestamp - right.createdTimestamp)
     .map((entry) => ({
@@ -78,16 +100,34 @@ async function getMessageHistory(message) {
       content: describeMessage(entry),
     }))
     .slice(-historySize);
+
+  log('history', 'Fetched channel history', {
+    guildId: message.guildId,
+    channelId: message.channelId,
+    messageId: message.id,
+    fetchedCount: history.length,
+  });
+
+  return history;
 }
 
 client.once(Events.ClientReady, (readyClient) => {
-  console.log(`Logged in as ${readyClient.user.tag}`);
+  log('startup', 'Client ready', {
+    userTag: readyClient.user.tag,
+    userId: readyClient.user.id,
+  });
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) {
     return;
   }
+
+  log('interaction', 'Received chat input command', {
+    commandName: interaction.commandName,
+    guildId: interaction.guildId,
+    userId: interaction.user.id,
+  });
 
   if (interaction.commandName === 'ping') {
     await interaction.reply('Pong!');
@@ -114,6 +154,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     setServiceChannel({
+      guildId: interaction.guildId,
+      channelId: channel.id,
+      setBy: interaction.user.id,
+    });
+
+    log('interaction', 'Updated service channel', {
       guildId: interaction.guildId,
       channelId: channel.id,
       setBy: interaction.user.id,
@@ -164,6 +210,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
       historySize,
     });
 
+    log('interaction', 'Updated history size', {
+      guildId: interaction.guildId,
+      historySize,
+      setBy: interaction.user.id,
+    });
+
     await interaction.reply({
       content: `History size set to ${historySize} messages.`,
       ephemeral: true,
@@ -176,9 +228,30 @@ client.on(Events.MessageCreate, async (message) => {
     return;
   }
 
+  log('message', 'Received guild message', {
+    guildId: message.guildId,
+    channelId: message.channelId,
+    messageId: message.id,
+    authorId: message.author.id,
+    isReply: Boolean(message.reference?.messageId),
+    mentionsBot: message.mentions.users.has(client.user.id),
+  });
+
   if (!message.mentions.users.has(client.user.id) || !message.reference?.messageId) {
+    log('message', 'Ignoring message because trigger conditions were not met', {
+      guildId: message.guildId,
+      channelId: message.channelId,
+      messageId: message.id,
+    });
     return;
   }
+
+  log('message', 'Trigger conditions met, fetching referenced message', {
+    guildId: message.guildId,
+    channelId: message.channelId,
+    triggerMessageId: message.id,
+    referencedMessageId: message.reference.messageId,
+  });
 
   const referencedMessage = await message.fetchReference().catch((error) => {
     console.error(
@@ -189,6 +262,13 @@ client.on(Events.MessageCreate, async (message) => {
   });
 
   if (!referencedMessage || referencedMessage.author.bot || !describeMessage(referencedMessage)) {
+    log('message', 'Referenced message could not be processed', {
+      guildId: message.guildId,
+      channelId: message.channelId,
+      triggerMessageId: message.id,
+      referencedMessageFound: Boolean(referencedMessage),
+      referencedAuthorIsBot: referencedMessage?.author?.bot ?? null,
+    });
     return;
   }
 
@@ -203,6 +283,14 @@ client.on(Events.MessageCreate, async (message) => {
   translationQueue.enqueue({
     message: referencedMessage,
     history,
+  });
+
+  log('message', 'Queued referenced message for translation', {
+    guildId: referencedMessage.guildId,
+    channelId: referencedMessage.channelId,
+    messageId: referencedMessage.id,
+    authorId: referencedMessage.author.id,
+    historyCount: history.length,
   });
 });
 
