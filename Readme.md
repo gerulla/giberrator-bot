@@ -128,6 +128,7 @@ docker compose up --build
 Register slash commands from inside the container:
 
 ```sh
+docker compose build giberrator
 docker compose run --rm giberrator npm run register
 ```
 
