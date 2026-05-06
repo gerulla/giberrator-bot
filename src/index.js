@@ -24,25 +24,10 @@ const client = new Client({
   ],
 });
 
-function formatMessageForResend(message) {
-  const parts = [];
-  const content = message.content.trim();
-
-  if (content) {
-    parts.push(content);
-  }
-
-  for (const attachment of message.attachments.values()) {
-    parts.push(attachment.url);
-  }
-
-  return parts.join('\n');
-}
-
 async function notifyServiceChannel(message, content) {
   const serviceChannelId = getServiceChannel({ guildId: message.guildId });
 
-  if (!serviceChannelId || serviceChannelId === message.channelId) {
+  if (!serviceChannelId) {
     return;
   }
 
@@ -194,21 +179,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.on(Events.MessageCreate, (message) => {
   if (!message.inGuild() || message.author.bot) {
-    return;
-  }
-
-  const serviceChannelId = getServiceChannel({ guildId: message.guildId });
-
-  if (serviceChannelId === message.channelId) {
-    const content = formatMessageForResend(message);
-
-    if (content) {
-      void message.channel.send({
-        content,
-        allowedMentions: { users: [], roles: [], repliedUser: false },
-      });
-    }
-
     return;
   }
 
