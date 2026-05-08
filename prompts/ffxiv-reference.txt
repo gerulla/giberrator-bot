@@ -1,34 +1,24 @@
-Final Fantasy XIV domain reference:
+FFXIV reference:
 
-Game / shorthand:
+Treat close matches to these as intentional FFXIV terms, not random typos.
+
+Core terms:
 - FFXIV, FF14, XIV, ARR, Heavensward, Stormblood, Shadowbringers, Endwalker, Dawntrail
-- MSQ, raid, savage, ultimate, extreme, EX, trial, dungeon, roulette, duty finder, party finder, PF, FC, Free Company, static, glam, glamour, gil, tome, tomestone, aetheryte, retainers, leves, fate, hunt train
+- MSQ, EX, savage, ultimate, trial, dungeon, roulette, PF, FC, static, glam, gil, tomestone, aetheryte, hunt train
 
 Races / clans:
 - Hyur, Elezen, Lalafell, Miqo'te, Roegadyn, Au Ra, Hrothgar, Viera
-- Midlander, Highlander, Wildwood, Duskwight, Plainsfolk, Dunesfolk, Seeker of the Sun, Keeper of the Moon, Sea Wolf, Hellsguard, Raen, Xaela, Helions, The Lost, Rava, Veena
+- Midlander, Highlander, Wildwood, Duskwight, Plainsfolk, Dunesfolk, Seeker of the Sun, Keeper of the Moon, Sea Wolf, Hellsguard, Raen, Xaela, Rava, Veena
 
-Jobs / roles:
+Jobs:
 - Paladin, Warrior, Dark Knight, Gunbreaker
 - White Mage, Scholar, Astrologian, Sage
 - Monk, Dragoon, Ninja, Samurai, Reaper, Viper
 - Bard, Machinist, Dancer
 - Black Mage, Summoner, Red Mage, Pictomancer, Blue Mage
-- tank, healer, melee, ranged, caster
 - PLD, WAR, DRK, GNB, WHM, SCH, AST, SGE, MNK, DRG, NIN, SAM, RPR, VPR, BRD, MCH, DNC, BLM, SMN, RDM, PCT, BLU
 
-Places / regions / cities:
-- Eorzea, Hydaelyn, Etheirys, Sharlayan, Old Sharlayan, Radz-at-Han, Tuliyollal
-- Limsa Lominsa, Gridania, Ul'dah, Ishgard, Kugane, Crystarium
-- Mor Dhona, Coerthas, Thanalan, La Noscea, Black Shroud, Garlemald, Thavnair, Tural
-
-Characters / organizations / references:
-- Warrior of Light, WoL, Scions, Scions of the Seventh Dawn
-- Alphinaud, Alisaie, Thancred, Y'shtola, Urianger, Krile, Tataru, G'raha Tia, Estinien
-- Zenos, Emet-Selch, Haurchefant, Venat, Meteion
-- Hildibrand, Manderville, Moogle, moogle tome
-
-Guidance:
-- Treat these as known proper nouns and community terms.
-- Prefer keeping these words intact rather than "correcting" them into unrelated real-world words.
-- When a gibberish token is close to one of these terms, consider it a strong candidate.
+Places / people:
+- Eorzea, Hydaelyn, Etheirys, Sharlayan, Radz-at-Han, Tuliyollal
+- Limsa Lominsa, Gridania, Ul'dah, Ishgard, Kugane, Crystarium, Garlemald, Thavnair, Tural
+- Warrior of Light, WoL, Scions, Alphinaud, Alisaie, Thancred, Y'shtola, Urianger, Krile, Tataru, G'raha Tia, Estinien, Zenos, Emet-Selch, Haurchefant, Venat, Meteion, Hildibrand, Manderville
