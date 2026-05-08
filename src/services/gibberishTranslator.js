@@ -12,6 +12,8 @@ const ollamaModel = process.env.OLLAMA_MODEL;
 const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 30000);
 const ollamaImageSummaryModel = process.env.OLLAMA_IMAGE_SUMMARY_MODEL ?? 'nemotron3:33b';
 const ollamaImageSummaryTimeoutMs = Number(process.env.OLLAMA_IMAGE_SUMMARY_TIMEOUT_MS ?? 120000);
+const ollamaImageSummaryMaxImages = Number(process.env.OLLAMA_IMAGE_SUMMARY_MAX_IMAGES ?? 1);
+const ollamaImageSummaryMaxTokens = Number(process.env.OLLAMA_IMAGE_SUMMARY_MAX_TOKENS ?? 120);
 const promptPath = process.env.UNGIBBERISH_PROMPT_PATH ?? defaultPromptPath;
 const interpretPromptPath =
   process.env.UNGIBBERISH_INTERPRET_PROMPT_PATH ?? defaultInterpretPromptPath;
@@ -41,6 +43,8 @@ log('translator', 'Loaded Ollama runtime config', {
   ollamaTimeoutMs,
   ollamaImageSummaryModel,
   ollamaImageSummaryTimeoutMs,
+  ollamaImageSummaryMaxImages,
+  ollamaImageSummaryMaxTokens,
   promptPath,
   interpretPromptPath,
   referencePath,
@@ -133,10 +137,42 @@ function normalizeSocialPostUrl(rawUrl) {
 
 function extractMetaImageUrls(html) {
   const imageUrls = [];
-  const metaPattern = /<meta\s+(?:property|name)=["'](?:og:image|twitter:image(?:\:src)?)["']\s+content=["']([^"']+)["'][^>]*>/gi;
+  const metaTagPattern = /<meta\b[^>]*>/gi;
+  const allowedKeys = new Set([
+    'og:image',
+    'og:image:secure_url',
+    'twitter:image',
+    'twitter:image:src',
+  ]);
+
+  let tagMatch;
+  while ((tagMatch = metaTagPattern.exec(html)) !== null) {
+    const tag = tagMatch[0];
+    const attributePattern = /([a-zA-Z_:]+)=["']([^"']+)["']/g;
+    const attributes = {};
+
+    let attributeMatch;
+    while ((attributeMatch = attributePattern.exec(tag)) !== null) {
+      attributes[attributeMatch[1].toLowerCase()] = attributeMatch[2];
+    }
+
+    const key = attributes.property ?? attributes.name;
+    const content = attributes.content;
+
+    if (key && content && allowedKeys.has(key.toLowerCase())) {
+      imageUrls.push(content);
+    }
+  }
+
+  return imageUrls;
+}
+
+function extractInlineImageUrls(html) {
+  const imageUrls = [];
+  const imagePattern = /<img\b[^>]*src=["']([^"']+)["'][^>]*>/gi;
 
   let match;
-  while ((match = metaPattern.exec(html)) !== null) {
+  while ((match = imagePattern.exec(html)) !== null) {
     imageUrls.push(match[1]);
   }
 
@@ -176,7 +212,20 @@ async function resolveSocialImageUrls(message) {
         }
 
         const html = await response.text();
-        return extractMetaImageUrls(html);
+        const imageUrls = [
+          ...extractMetaImageUrls(html),
+          ...extractInlineImageUrls(html),
+        ]
+          .filter((url, index, urls) => urls.indexOf(url) === index)
+          .filter((url) => !url.startsWith('data:'));
+
+        log('translator', 'Resolved social image candidates', {
+          targetMessageId: message?.id ?? null,
+          url,
+          imageCount: imageUrls.length,
+        });
+
+        return imageUrls;
       } catch (error) {
         log('translator', 'Failed to resolve social image link', {
           targetMessageId: message?.id ?? null,
@@ -194,6 +243,7 @@ async function resolveSocialImageUrls(message) {
 }
 
 async function fetchImageAsBase64(url) {
+  const startedAt = Date.now();
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -201,6 +251,11 @@ async function fetchImageAsBase64(url) {
   }
 
   const bytes = Buffer.from(await response.arrayBuffer());
+  log('translator', 'Fetched image bytes for summary', {
+    url,
+    byteLength: bytes.length,
+    durationMs: Date.now() - startedAt,
+  });
   return bytes.toString('base64');
 }
 
@@ -283,18 +338,23 @@ async function summarizeImages(job) {
     imageCount: totalImageCount,
     attachmentCount: imageAttachments.length,
     socialImageCount: socialImageUrls.length,
+    maxImages: ollamaImageSummaryMaxImages,
+    maxTokens: ollamaImageSummaryMaxTokens,
     targetMessageId: job?.message?.id ?? null,
   });
 
+  const selectedImageUrls = [
+    ...imageAttachments.map((attachment) => attachment.url),
+    ...socialImageUrls,
+  ].slice(0, Math.max(1, ollamaImageSummaryMaxImages));
+
   const encodedImages = await Promise.all(
-    [
-      ...imageAttachments.map((attachment) => attachment.url),
-      ...socialImageUrls,
-    ].map((url) => fetchImageAsBase64(url)),
+    selectedImageUrls.map((url) => fetchImageAsBase64(url)),
   );
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ollamaImageSummaryTimeoutMs);
+  const startedAt = Date.now();
 
   try {
     let response;
@@ -311,13 +371,14 @@ async function summarizeImages(job) {
             {
               role: 'user',
               content:
-                'Summarize these Discord image attachments in one concise paragraph. Focus on what is visibly happening, any text shown in the image, and details that would help interpret the sender\'s intended meaning.',
+                'Give one short summary of what is in this image and any visible text that matters for understanding the message.',
               images: encodedImages,
             },
           ],
           stream: false,
           options: {
             temperature: 0,
+            num_predict: ollamaImageSummaryMaxTokens,
           },
         }),
         signal: controller.signal,
@@ -353,7 +414,9 @@ async function summarizeImages(job) {
     log('translator', 'Completed image summary request', {
       targetMessageId: job?.message?.id ?? null,
       imageCount: totalImageCount,
+      usedImageCount: selectedImageUrls.length,
       summaryLength: summary.length,
+      durationMs: Date.now() - startedAt,
     });
 
     return summary;
