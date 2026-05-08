@@ -10,6 +10,8 @@ const defaultReferencePath = path.resolve(__dirname, '../../prompts/ffxiv-refere
 const ollamaBaseUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
 const ollamaModel = process.env.OLLAMA_MODEL;
 const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 30000);
+const ollamaImageSummaryModel = process.env.OLLAMA_IMAGE_SUMMARY_MODEL ?? 'nemotron3:33b';
+const ollamaImageSummaryTimeoutMs = Number(process.env.OLLAMA_IMAGE_SUMMARY_TIMEOUT_MS ?? 120000);
 const promptPath = process.env.UNGIBBERISH_PROMPT_PATH ?? defaultPromptPath;
 const interpretPromptPath =
   process.env.UNGIBBERISH_INTERPRET_PROMPT_PATH ?? defaultInterpretPromptPath;
@@ -78,6 +80,119 @@ function normalizeBaseUrl(baseUrl) {
   return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 }
 
+function getImageAttachments(message) {
+  const attachments = Array.from(message?.attachments?.values?.() ?? []);
+
+  return attachments.filter((attachment) => {
+    if (attachment.contentType?.startsWith('image/')) {
+      return true;
+    }
+
+    return /\.(png|jpe?g|gif|webp|bmp)$/i.test(attachment.name ?? attachment.url ?? '');
+  });
+}
+
+function extractUrls(text) {
+  return text.match(/https?:\/\/\S+/gi) ?? [];
+}
+
+function normalizeSocialPostUrl(rawUrl) {
+  let parsed;
+
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  if (hostname === 'x.com' || hostname === 'www.x.com' ||
+      hostname === 'twitter.com' || hostname === 'www.twitter.com') {
+    parsed.hostname = 'vxtwitter.com';
+    return parsed.toString();
+  }
+
+  if (hostname === 'vxtwitter.com' || hostname === 'www.vxtwitter.com') {
+    return parsed.toString();
+  }
+
+  return null;
+}
+
+function extractMetaImageUrls(html) {
+  const imageUrls = [];
+  const metaPattern = /<meta\s+(?:property|name)=["'](?:og:image|twitter:image(?:\:src)?)["']\s+content=["']([^"']+)["'][^>]*>/gi;
+
+  let match;
+  while ((match = metaPattern.exec(html)) !== null) {
+    imageUrls.push(match[1]);
+  }
+
+  return imageUrls;
+}
+
+async function resolveSocialImageUrls(message) {
+  const normalizedUrls = extractUrls(message?.content ?? '')
+    .map((url) => normalizeSocialPostUrl(url))
+    .filter(Boolean);
+
+  if (normalizedUrls.length === 0) {
+    return [];
+  }
+
+  const imageUrlSets = await Promise.all(
+    normalizedUrls.map(async (url) => {
+      log('translator', 'Resolving social image link', {
+        targetMessageId: message?.id ?? null,
+        url,
+      });
+
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Giberrator/1.0 (+https://github.com/)',
+          },
+        });
+
+        if (!response.ok) {
+          log('translator', 'Failed to fetch social page', {
+            targetMessageId: message?.id ?? null,
+            url,
+            status: response.status,
+          });
+          return [];
+        }
+
+        const html = await response.text();
+        return extractMetaImageUrls(html);
+      } catch (error) {
+        log('translator', 'Failed to resolve social image link', {
+          targetMessageId: message?.id ?? null,
+          url,
+          error: error.message,
+        });
+        return [];
+      }
+    }),
+  );
+
+  return imageUrlSets
+    .flat()
+    .filter((url, index, urls) => urls.indexOf(url) === index);
+}
+
+async function fetchImageAsBase64(url) {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw createTranslationError(`Failed to fetch image attachment: ${response.status}`);
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+  return bytes.toString('base64');
+}
+
 function extractQuotedStrings(text) {
   const matches = text.match(/"([^"\\]*(?:\\.[^"\\]*)*)"/g) ?? [];
   return matches
@@ -143,14 +258,108 @@ function normalizeTranslations(value) {
     .slice(0, 3);
 }
 
+async function summarizeImages(job) {
+  const imageAttachments = getImageAttachments(job?.message);
+  const socialImageUrls = await resolveSocialImageUrls(job?.message);
+  const totalImageCount = imageAttachments.length + socialImageUrls.length;
+
+  if (totalImageCount === 0) {
+    return null;
+  }
+
+  log('translator', 'Starting image summary request', {
+    model: ollamaImageSummaryModel,
+    imageCount: totalImageCount,
+    attachmentCount: imageAttachments.length,
+    socialImageCount: socialImageUrls.length,
+    targetMessageId: job?.message?.id ?? null,
+  });
+
+  const encodedImages = await Promise.all(
+    [
+      ...imageAttachments.map((attachment) => attachment.url),
+      ...socialImageUrls,
+    ].map((url) => fetchImageAsBase64(url)),
+  );
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ollamaImageSummaryTimeoutMs);
+
+  try {
+    let response;
+
+    try {
+      response = await fetch(`${normalizeBaseUrl(ollamaBaseUrl)}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: ollamaImageSummaryModel,
+          messages: [
+            {
+              role: 'user',
+              content:
+                'Summarize these Discord image attachments in one concise paragraph. Focus on what is visibly happening, any text shown in the image, and details that would help interpret the sender\'s intended meaning.',
+              images: encodedImages,
+            },
+          ],
+          stream: false,
+          options: {
+            temperature: 0,
+          },
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        throw createTranslationError(
+          `Image summary request timed out after ${ollamaImageSummaryTimeoutMs}ms.`,
+          error,
+        );
+      }
+
+      throw createTranslationError(
+        `Failed to connect to Ollama image model at ${normalizeBaseUrl(ollamaBaseUrl)}.`,
+        error,
+      );
+    }
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw createTranslationError(
+        `Ollama image summary request failed with ${response.status}: ${body}`,
+      );
+    }
+
+    const data = await response.json();
+    const summary = data.message?.content?.trim() ?? '';
+
+    if (!summary) {
+      throw createTranslationError('Ollama image summary response was empty.');
+    }
+
+    log('translator', 'Completed image summary request', {
+      targetMessageId: job?.message?.id ?? null,
+      imageCount: totalImageCount,
+      summaryLength: summary.length,
+    });
+
+    return summary;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function buildUserPrompt(job) {
   if (typeof job === 'string') {
     return job.trim();
   }
 
   const targetMessage = job?.message?.content?.trim();
+  const imageSummary = job?.imageSummary?.trim();
 
-  if (!targetMessage) {
+  if (!targetMessage && !imageSummary) {
     return '';
   }
 
@@ -160,15 +369,25 @@ function buildUserPrompt(job) {
     history,
     target_message: {
       author: job.message.author?.username ?? 'Unknown',
-      content: targetMessage,
+      content: targetMessage ?? '',
     },
   };
+
+  if (imageSummary) {
+    payload.image_summary = imageSummary;
+  }
 
   return JSON.stringify(payload);
 }
 
 export async function translateGibberish(job) {
-  const input = buildUserPrompt(job);
+  const enrichedJob = typeof job === 'string'
+    ? job
+    : {
+        ...job,
+        imageSummary: await summarizeImages(job),
+      };
+  const input = buildUserPrompt(enrichedJob);
   const mode = job?.mode === 'translate' ? 'translate' : 'interpret';
 
   if (!input) {
@@ -181,6 +400,7 @@ export async function translateGibberish(job) {
     mode,
     baseUrl: normalizeBaseUrl(ollamaBaseUrl),
     inputLength: input.length,
+    hasImageSummary: Boolean(enrichedJob?.imageSummary),
     historyCount: Array.isArray(job?.history) ? job.history.length : 0,
     targetAuthor: job?.message?.author?.username ?? null,
     targetMessageId: job?.message?.id ?? null,

@@ -59,6 +59,8 @@ User B replies to User A and says: @Giberrator translate
 
 The translator also receives recent chat context from the same channel. By default it includes the previous `15` non-bot messages, and you can change that per server with `/sethistorysize`.
 
+If the replied-to message includes image attachments, or contains an `x.com`, `twitter.com`, or `vxtwitter.com` post link with an image preview, Giberrator first sends those images to Ollama using `nemotron3:33b` to get a concise image summary, then uses that summary as extra context for the final interpretation or translation.
+
 Before translation starts, Giberrator logs the picked-up message to the configured service channel in this format:
 
 ```text
@@ -83,9 +85,12 @@ DISCORD_CLIENT_ID=your_discord_application_client_id
 DISCORD_GUILD_ID=your_test_server_id
 GIBERRATOR_DB_PATH=data/giberrator.sqlite
 OLLAMA_MODEL=llama3.2
+OLLAMA_IMAGE_SUMMARY_MODEL=nemotron3:33b
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_TIMEOUT_MS=30000
+OLLAMA_IMAGE_SUMMARY_TIMEOUT_MS=120000
 UNGIBBERISH_PROMPT_PATH=prompts/ungibberish-system.txt
+UNGIBBERISH_INTERPRET_PROMPT_PATH=prompts/ungibberish-interpret-system.txt
 UNGIBBERISH_REFERENCE_PATH=prompts/ffxiv-reference.txt
 TRANSLATION_QUEUE_MAX_SIZE=100
 ```
@@ -108,6 +113,8 @@ The default interpreter-style prompt lives in `prompts/ungibberish-interpret-sys
 The simpler sanitized translation prompt lives in `prompts/ungibberish-system.txt`.
 
 FFXIV-specific glossary/context lives in `prompts/ffxiv-reference.txt`. The translator appends that reference file to the system prompt so common job names, races, places, shorthand, and community terms are treated as known terms instead of random gibberish.
+
+When a replied-to message includes images, the translator first runs a vision pass with `OLLAMA_IMAGE_SUMMARY_MODEL` and uses the resulting image summary as extra context for the final text response.
 
 The backend translator accepts a string and returns a JSON array of one to three readable translations:
 
