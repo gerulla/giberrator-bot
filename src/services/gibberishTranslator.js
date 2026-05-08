@@ -482,6 +482,11 @@ export async function translateGibberish(job) {
     targetAuthor: job?.message?.author?.username ?? null,
     targetMessageId: job?.message?.id ?? null,
   });
+  log('translator', 'Final text prompt payload', {
+    mode,
+    targetMessageId: job?.message?.id ?? null,
+    prompt: input,
+  });
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ollamaTimeoutMs);
