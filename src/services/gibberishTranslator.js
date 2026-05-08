@@ -12,8 +12,6 @@ const ollamaModel = process.env.OLLAMA_MODEL;
 const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 30000);
 const ollamaImageSummaryModel = process.env.OLLAMA_IMAGE_SUMMARY_MODEL ?? 'nemotron3:33b';
 const ollamaImageSummaryTimeoutMs = Number(process.env.OLLAMA_IMAGE_SUMMARY_TIMEOUT_MS ?? 120000);
-const ollamaImageSummaryMaxImages = Number(process.env.OLLAMA_IMAGE_SUMMARY_MAX_IMAGES ?? 1);
-const ollamaImageSummaryMaxTokens = Number(process.env.OLLAMA_IMAGE_SUMMARY_MAX_TOKENS ?? 120);
 const promptPath = process.env.UNGIBBERISH_PROMPT_PATH ?? defaultPromptPath;
 const interpretPromptPath =
   process.env.UNGIBBERISH_INTERPRET_PROMPT_PATH ?? defaultInterpretPromptPath;
@@ -43,8 +41,6 @@ log('translator', 'Loaded Ollama runtime config', {
   ollamaTimeoutMs,
   ollamaImageSummaryModel,
   ollamaImageSummaryTimeoutMs,
-  ollamaImageSummaryMaxImages,
-  ollamaImageSummaryMaxTokens,
   promptPath,
   interpretPromptPath,
   referencePath,
@@ -338,15 +334,13 @@ async function summarizeImages(job) {
     imageCount: totalImageCount,
     attachmentCount: imageAttachments.length,
     socialImageCount: socialImageUrls.length,
-    maxImages: ollamaImageSummaryMaxImages,
-    maxTokens: ollamaImageSummaryMaxTokens,
     targetMessageId: job?.message?.id ?? null,
   });
 
   const selectedImageUrls = [
     ...imageAttachments.map((attachment) => attachment.url),
     ...socialImageUrls,
-  ].slice(0, Math.max(1, ollamaImageSummaryMaxImages));
+  ];
 
   const encodedImages = await Promise.all(
     selectedImageUrls.map((url) => fetchImageAsBase64(url)),
@@ -360,25 +354,19 @@ async function summarizeImages(job) {
     let response;
 
     try {
-      response = await fetch(`${normalizeBaseUrl(ollamaBaseUrl)}/api/chat`, {
+      response = await fetch(`${normalizeBaseUrl(ollamaBaseUrl)}/api/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           model: ollamaImageSummaryModel,
-          messages: [
-            {
-              role: 'user',
-              content:
-                'Give one short summary of what is in this image and any visible text that matters for understanding the message.',
-              images: encodedImages,
-            },
-          ],
+          prompt:
+            'Summarize this image briefly. Mention the main visible content and any readable text that matters for interpreting the Discord message.',
+          images: encodedImages,
           stream: false,
           options: {
             temperature: 0,
-            num_predict: ollamaImageSummaryMaxTokens,
           },
         }),
         signal: controller.signal,
@@ -404,11 +392,20 @@ async function summarizeImages(job) {
       );
     }
 
-    const data = await response.json();
-    const summary = data.message?.content?.trim() ?? '';
+    let data;
+
+    try {
+      data = await response.json();
+    } catch (error) {
+      throw createTranslationError('Failed to parse Ollama image summary response as JSON.', error);
+    }
+
+    const summary = data.response?.trim() ?? data.message?.content?.trim() ?? '';
 
     if (!summary) {
-      throw createTranslationError('Ollama image summary response was empty.');
+      throw createTranslationError(
+        `Ollama image summary response was empty. done=${String(data.done)} eval_count=${String(data.eval_count ?? '')}`,
+      );
     }
 
     log('translator', 'Completed image summary request', {
@@ -417,6 +414,8 @@ async function summarizeImages(job) {
       usedImageCount: selectedImageUrls.length,
       summaryLength: summary.length,
       durationMs: Date.now() - startedAt,
+      promptEvalCount: data.prompt_eval_count ?? null,
+      evalCount: data.eval_count ?? null,
     });
 
     return summary;
