@@ -35,6 +35,17 @@ if (!ollamaModel) {
   throw new Error('Missing OLLAMA_MODEL environment variable.');
 }
 
+log('translator', 'Loaded Ollama runtime config', {
+  ollamaBaseUrl: normalizeBaseUrl(ollamaBaseUrl),
+  ollamaModel,
+  ollamaTimeoutMs,
+  ollamaImageSummaryModel,
+  ollamaImageSummaryTimeoutMs,
+  promptPath,
+  interpretPromptPath,
+  referencePath,
+});
+
 function createTranslationError(message, cause) {
   const error = new Error(message);
   error.name = 'TranslationError';
