@@ -417,6 +417,10 @@ async function summarizeImages(job) {
       promptEvalCount: data.prompt_eval_count ?? null,
       evalCount: data.eval_count ?? null,
     });
+    log('translator', 'Image summary text', {
+      targetMessageId: job?.message?.id ?? null,
+      summary,
+    });
 
     return summary;
   } finally {
