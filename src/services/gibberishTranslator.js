@@ -12,6 +12,7 @@ const ollamaModel = process.env.OLLAMA_MODEL;
 const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 30000);
 const ollamaImageSummaryModel = process.env.OLLAMA_IMAGE_SUMMARY_MODEL ?? 'nemotron3:33b';
 const ollamaImageSummaryTimeoutMs = Number(process.env.OLLAMA_IMAGE_SUMMARY_TIMEOUT_MS ?? 120000);
+const fixTwitterApiBaseUrl = process.env.FIXTWITTER_API_BASE_URL ?? 'https://api.fxtwitter.com';
 const promptPath = process.env.UNGIBBERISH_PROMPT_PATH ?? defaultPromptPath;
 const interpretPromptPath =
   process.env.UNGIBBERISH_INTERPRET_PROMPT_PATH ?? defaultInterpretPromptPath;
@@ -41,6 +42,7 @@ log('translator', 'Loaded Ollama runtime config', {
   ollamaTimeoutMs,
   ollamaImageSummaryModel,
   ollamaImageSummaryTimeoutMs,
+  fixTwitterApiBaseUrl,
   promptPath,
   interpretPromptPath,
   referencePath,
@@ -107,7 +109,7 @@ function extractUrls(text) {
   return text.match(/https?:\/\/\S+/gi) ?? [];
 }
 
-function normalizeSocialPostUrl(rawUrl) {
+function extractTweetStatusId(rawUrl) {
   let parsed;
 
   try {
@@ -118,17 +120,25 @@ function normalizeSocialPostUrl(rawUrl) {
 
   const hostname = parsed.hostname.toLowerCase();
 
-  if (hostname === 'x.com' || hostname === 'www.x.com' ||
-      hostname === 'twitter.com' || hostname === 'www.twitter.com') {
-    parsed.hostname = 'vxtwitter.com';
-    return parsed.toString();
+  const supportedHosts = new Set([
+    'x.com',
+    'www.x.com',
+    'twitter.com',
+    'www.twitter.com',
+    'vxtwitter.com',
+    'www.vxtwitter.com',
+    'fxtwitter.com',
+    'www.fxtwitter.com',
+    'fixvx.com',
+    'www.fixvx.com',
+  ]);
+
+  if (!supportedHosts.has(hostname)) {
+    return null;
   }
 
-  if (hostname === 'vxtwitter.com' || hostname === 'www.vxtwitter.com') {
-    return parsed.toString();
-  }
-
-  return null;
+  const match = parsed.pathname.match(/\/status\/(\d+)/i) ?? parsed.pathname.match(/\/i\/status\/(\d+)/i);
+  return match?.[1] ?? null;
 }
 
 function extractMetaImageUrls(html) {
@@ -176,23 +186,46 @@ function extractInlineImageUrls(html) {
 }
 
 async function resolveSocialImageUrls(message) {
-  const normalizedUrls = extractUrls(message?.content ?? '')
-    .map((url) => normalizeSocialPostUrl(url))
+  const statusIds = extractUrls(message?.content ?? '')
+    .map((url) => extractTweetStatusId(url))
     .filter(Boolean);
 
-  if (normalizedUrls.length === 0) {
+  if (statusIds.length === 0) {
     return [];
   }
 
   const imageUrlSets = await Promise.all(
-    normalizedUrls.map(async (url) => {
+    statusIds.map(async (statusId) => {
       log('translator', 'Resolving social image link', {
-        targetMessageId: message?.id ?? null,
-        url,
-      });
+          targetMessageId: message?.id ?? null,
+          statusId,
+        });
 
       try {
-        const response = await fetch(url, {
+        const apiUrl = `${normalizeBaseUrl(fixTwitterApiBaseUrl)}/status/${statusId}`;
+        const apiResponse = await fetch(apiUrl);
+
+        if (apiResponse.ok) {
+          const apiData = await apiResponse.json();
+          const photoUrls = apiData.tweet?.media?.photos?.map((photo) => photo.url) ?? [];
+
+          if (photoUrls.length > 0) {
+            log('translator', 'Resolved social images from FixTwitter API', {
+              targetMessageId: message?.id ?? null,
+              statusId,
+              imageCount: photoUrls.length,
+            });
+            return photoUrls;
+          }
+        }
+
+        log('translator', 'Falling back to social page scraping', {
+          targetMessageId: message?.id ?? null,
+          statusId,
+        });
+
+        const fallbackUrl = `https://vxtwitter.com/i/status/${statusId}`;
+        const response = await fetch(fallbackUrl, {
           headers: {
             'User-Agent': 'Giberrator/1.0 (+https://github.com/)',
           },
@@ -201,7 +234,7 @@ async function resolveSocialImageUrls(message) {
         if (!response.ok) {
           log('translator', 'Failed to fetch social page', {
             targetMessageId: message?.id ?? null,
-            url,
+            statusId,
             status: response.status,
           });
           return [];
@@ -217,7 +250,7 @@ async function resolveSocialImageUrls(message) {
 
         log('translator', 'Resolved social image candidates', {
           targetMessageId: message?.id ?? null,
-          url,
+          statusId,
           imageCount: imageUrls.length,
         });
 
@@ -225,7 +258,7 @@ async function resolveSocialImageUrls(message) {
       } catch (error) {
         log('translator', 'Failed to resolve social image link', {
           targetMessageId: message?.id ?? null,
-          url,
+          statusId,
           error: error.message,
         });
         return [];
